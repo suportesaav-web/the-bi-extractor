@@ -21,37 +21,71 @@ REVOKED_KEYS = {
     "AQ.Ab8RN6LV7L0YNvB5VyjWvileuaJrfeLm5SLmmX8Mn34PCioi7w",
 }
 
-def get_default_api_key() -> str:
-    """Obtém a chave de API ativa do Streamlit Secrets (Cloud), arquivo .env local ou variáveis de ambiente."""
-    # 1. Tenta obter de st.secrets (Streamlit Community Cloud)
+def get_gemini_api_keys() -> List[str]:
+    """Obtém lista de chaves de API válidas disponíveis para rotação e contingência."""
+    keys: List[str] = []
+
+    # 1. Tenta obter do Streamlit Secrets (Streamlit Community Cloud)
     try:
         import streamlit as st
-        if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
-            sec_val = str(st.secrets["GEMINI_API_KEY"]).strip()
-            if sec_val and sec_val not in REVOKED_KEYS:
-                return sec_val
+        if hasattr(st, "secrets"):
+            if "GEMINI_API_KEYS" in st.secrets:
+                raw_pool = st.secrets["GEMINI_API_KEYS"]
+                if isinstance(raw_pool, list):
+                    for k in raw_pool:
+                        ks = str(k).strip()
+                        if ks and ks not in REVOKED_KEYS and ks not in keys:
+                            keys.append(ks)
+            for secret_var in [
+                "GEMINI_API_KEY",
+                "GEMINI_API_KEY_BACKUP",
+                "GEMINI_API_KEY_2",
+                "GEMINI_API_KEY_SAAV",
+            ]:
+                if secret_var in st.secrets:
+                    ks = str(st.secrets[secret_var]).strip()
+                    if ks and ks not in REVOKED_KEYS and ks not in keys:
+                        keys.append(ks)
     except Exception:
         pass
 
-    # 2. Prioriza o arquivo .env local
+    # 2. Arquivo .env local
     env_file = Path(__file__).resolve().parent.parent / ".env"
     if env_file.exists():
         try:
             for line in env_file.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
-                if line.startswith("GEMINI_API_KEY="):
-                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    if val and val not in REVOKED_KEYS:
-                        return val
+                for prefix in [
+                    "GEMINI_API_KEY=",
+                    "GEMINI_API_KEY_BACKUP=",
+                    "GEMINI_API_KEY_2=",
+                    "GEMINI_API_KEY_SAAV=",
+                ]:
+                    if line.startswith(prefix):
+                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        if val and val not in REVOKED_KEYS and val not in keys:
+                            keys.append(val)
         except Exception:
             pass
 
-    # 3. Variável de ambiente (se válida e não revogada)
-    key = os.environ.get("GEMINI_API_KEY", "")
-    if key and key not in REVOKED_KEYS:
-        return key
+    # 3. Variáveis de ambiente do sistema
+    for env_var in [
+        "GEMINI_API_KEY",
+        "GEMINI_API_KEY_BACKUP",
+        "GEMINI_API_KEY_2",
+        "GEMINI_API_KEY_SAAV",
+    ]:
+        val = os.environ.get(env_var, "").strip()
+        if val and val not in REVOKED_KEYS and val not in keys:
+            keys.append(val)
 
-    return ""
+    return keys
+
+
+def get_default_api_key() -> str:
+    """Obtém a chave primária disponível."""
+    pool = get_gemini_api_keys()
+    return pool[0] if pool else ""
 
 HYBRID_EXTRACTION_PROMPT = """
 Você é um Engenheiro de Dados especialista em Visão Computacional, Análise de Documentos e Extração Tabular.
@@ -161,12 +195,6 @@ def extract_matrix_with_gemini(
     - Matriz Power BI Saavedra (formato enriquecido com KPIs, BUs e Looker Studio).
     - Tabela genérica (extrai colunas e linhas dinamicamente para exibição e download em Excel/CSV).
     """
-    key = api_key if (api_key and api_key not in REVOKED_KEYS) else None
-    if not key:
-        key = get_default_api_key()
-    if not key:
-        raise ValueError("Chave de API do Gemini não configurada ou inválida.")
-
     # 1. Identificar formato (PDF vs Imagem) e preparar conteúdo multimodal
     contents_to_send = []
 
@@ -202,24 +230,37 @@ def extract_matrix_with_gemini(
             pil_img = Image.open(io.BytesIO(raw_bytes))
             contents_to_send = [pil_img, HYBRID_EXTRACTION_PROMPT]
 
-    # 2. Inicializar cliente oficial do Google GenAI
-    client = genai.Client(api_key=key)
+    # 2. Determinar pool de chaves a tentar (prioriza a chave informada, seguida do pool de contingência)
+    keys_to_try: List[str] = []
+    if api_key and api_key.strip() and api_key.strip() not in REVOKED_KEYS:
+        keys_to_try.append(api_key.strip())
+
+    for k in get_gemini_api_keys():
+        if k not in keys_to_try:
+            keys_to_try.append(k)
+
+    if not keys_to_try:
+        raise ValueError("Nenhuma chave de API do Gemini configurada ou válida.")
 
     response = None
     last_error = None
 
-    # Modelos oficiais em ordem de resiliência e performance
+    # Modelos oficiais em ordem de resiliência e performance testada
     CANDIDATE_MODELS = [
+        "gemini-flash-latest",
         "gemini-2.5-flash",
-        "gemini-2.0-flash",
         "gemini-1.5-flash",
         "gemini-2.5-pro",
         "gemini-1.5-pro",
-        "gemini-flash-latest",
     ]
 
-    for model_name in CANDIDATE_MODELS:
-        for attempt in range(2):
+    for current_key in keys_to_try:
+        try:
+            client = genai.Client(api_key=current_key)
+        except Exception:
+            continue
+
+        for model_name in CANDIDATE_MODELS:
             try:
                 response = client.models.generate_content(
                     model=model_name,
@@ -231,13 +272,13 @@ def extract_matrix_with_gemini(
             except Exception as err:
                 last_error = err
                 err_str = str(err).lower()
-                # Em caso de pico de demanda (503) ou rate limit (429), pausa brevemente antes do próximo teste
+                # Em caso de pico de demanda (503) ou quota esgotada (429), tenta próximo modelo ou próxima chave
                 if any(code in err_str for code in ["503", "unavailable", "high demand", "429", "resource_exhausted"]):
-                    time.sleep(1.5)
+                    time.sleep(0.5)
                     continue
-                # Se o modelo não estiver disponível no endpoint (404/not found), passa para o próximo candidato
+                # Se o modelo não estiver disponível no endpoint (404), passa para o próximo candidato
                 if "not_found" in err_str or "not found" in err_str or "404" in err_str:
-                    break
+                    continue
         if response and response.text:
             break
 
@@ -246,7 +287,7 @@ def extract_matrix_with_gemini(
         if "503" in err_str or "high demand" in err_str.lower() or "unavailable" in err_str.lower():
             raise RuntimeError(
                 "Os servidores do Google Gemini estão enfrentando alta demanda temporária (Erro 503). "
-                "O sistema tentou os modelos de contingência automaticamente. Por favor, aguarde alguns segundos e tente novamente."
+                "O sistema tentou os modelos e chaves de contingência automaticamente. Por favor, aguarde alguns segundos e tente novamente."
             )
         err_msg = f"Falha ao processar arquivo com Gemini Vision: {last_error}" if last_error else "Resposta vazia do modelo."
         raise RuntimeError(err_msg)
