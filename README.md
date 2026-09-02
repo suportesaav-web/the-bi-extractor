@@ -5,12 +5,21 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Acesse Online](https://img.shields.io/badge/🚀_Acesse_Online-Streamlit_Cloud-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://the-bi-extractor-saavedra.streamlit.app/)
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-Vision_AI-8E75C2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/)
 [![Looker Studio](https://img.shields.io/badge/Looker_Studio-Ready-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://lookerstudio.google.com/)
 [![Excel](https://img.shields.io/badge/Microsoft_Excel-OpenPyXL-217346?style=for-the-badge&logo=microsoftexcel&logoColor=white)](https://openpyxl.readthedocs.io/)
 
 <p align="center">
   <b>Transforme exportações brutas do Power BI, faturas em PDF e capturas de tela em bases Tidy Data perfeitamente estruturadas para o Looker Studio e planilhas corporativas com fórmulas ativas.</b>
+</p>
+
+<p align="center">
+  <a href="https://the-bi-extractor-saavedra.streamlit.app/" target="_blank">
+    <img src="https://static.streamlit.io/badges/streamlit_badge_black_white.svg" alt="Open in Streamlit" />
+  </a>
+  <br>
+  🔗 <b>URL de Acesso:</b> <a href="https://the-bi-extractor-saavedra.streamlit.app/" target="_blank"><code>https://the-bi-extractor-saavedra.streamlit.app/</code></a>
 </p>
 
 ---
@@ -202,6 +211,9 @@ Acesse no seu navegador: `http://localhost:8501`.
    GEMINI_API_KEY = "sua_chave_aqui"
    ```
 6. Clique em **"Deploy!"**. O ambiente instalará os pacotes de `requirements.txt` e publicará o app online.
+
+> 🌐 **Ambiente de Produção Ativo:**  
+> A aplicação oficial já está em execução no Streamlit Cloud: [https://the-bi-extractor-saavedra.streamlit.app/](https://the-bi-extractor-saavedra.streamlit.app/)
 
 </details>
 
