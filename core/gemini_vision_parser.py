@@ -21,8 +21,18 @@ REVOKED_KEYS = {
 }
 
 def get_default_api_key() -> str:
-    """Obtém a chave de API ativa do arquivo .env local ou das variáveis de ambiente."""
-    # 1. Prioriza o arquivo .env local
+    """Obtém a chave de API ativa do Streamlit Secrets (Cloud), arquivo .env local ou variáveis de ambiente."""
+    # 1. Tenta obter de st.secrets (Streamlit Community Cloud)
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+            sec_val = str(st.secrets["GEMINI_API_KEY"]).strip()
+            if sec_val and sec_val not in REVOKED_KEYS:
+                return sec_val
+    except Exception:
+        pass
+
+    # 2. Prioriza o arquivo .env local
     env_file = Path(__file__).resolve().parent.parent / ".env"
     if env_file.exists():
         try:
@@ -35,7 +45,7 @@ def get_default_api_key() -> str:
         except Exception:
             pass
 
-    # 2. Variável de ambiente (se válida e não revogada)
+    # 3. Variável de ambiente (se válida e não revogada)
     key = os.environ.get("GEMINI_API_KEY", "")
     if key and key not in REVOKED_KEYS:
         return key
