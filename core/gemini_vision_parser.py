@@ -6,6 +6,7 @@ import io
 import json
 import os
 import re
+import time
 from typing import Any, Dict, List, Optional, Union
 
 from google import genai
@@ -206,21 +207,47 @@ def extract_matrix_with_gemini(
 
     response = None
     last_error = None
-    # Prioriza gemini-3.6-flash suportado pelo projeto
-    for model_name in ["gemini-3.6-flash", "gemini-flash-latest"]:
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=contents_to_send,
-                config=types.GenerateContentConfig(response_mime_type="application/json"),
-            )
-            if response and response.text:
-                break
-        except Exception as err:
-            last_error = err
-            continue
+
+    # Modelos oficiais em ordem de resiliência e performance
+    CANDIDATE_MODELS = [
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-2.5-pro",
+        "gemini-1.5-pro",
+        "gemini-flash-latest",
+    ]
+
+    for model_name in CANDIDATE_MODELS:
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents_to_send,
+                    config=types.GenerateContentConfig(response_mime_type="application/json"),
+                )
+                if response and response.text:
+                    break
+            except Exception as err:
+                last_error = err
+                err_str = str(err).lower()
+                # Em caso de pico de demanda (503) ou rate limit (429), pausa brevemente antes do próximo teste
+                if any(code in err_str for code in ["503", "unavailable", "high demand", "429", "resource_exhausted"]):
+                    time.sleep(1.5)
+                    continue
+                # Se o modelo não estiver disponível no endpoint (404/not found), passa para o próximo candidato
+                if "not_found" in err_str or "not found" in err_str or "404" in err_str:
+                    break
+        if response and response.text:
+            break
 
     if not response or not response.text:
+        err_str = str(last_error) if last_error else ""
+        if "503" in err_str or "high demand" in err_str.lower() or "unavailable" in err_str.lower():
+            raise RuntimeError(
+                "Os servidores do Google Gemini estão enfrentando alta demanda temporária (Erro 503). "
+                "O sistema tentou os modelos de contingência automaticamente. Por favor, aguarde alguns segundos e tente novamente."
+            )
         err_msg = f"Falha ao processar arquivo com Gemini Vision: {last_error}" if last_error else "Resposta vazia do modelo."
         raise RuntimeError(err_msg)
 
