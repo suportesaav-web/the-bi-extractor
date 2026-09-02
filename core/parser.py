@@ -225,10 +225,16 @@ def parse_raw_data(file_input: Union[BinaryIO, io.BytesIO, str, pd.DataFrame]) -
         if any(file_name_lower.endswith(ext) for ext in [".png", ".jpg", ".jpeg"]):
             try:
                 return extract_matrix_with_gemini(file_input)
-            except Exception:
-                if hasattr(file_input, "seek"):
-                    file_input.seek(0)
-                return parse_image_matrix(file_input)
+            except Exception as e:
+                try:
+                    from core.image_parser import WINSDK_AVAILABLE
+                    if WINSDK_AVAILABLE and "Nenhuma tabela" not in str(e):
+                        if hasattr(file_input, "seek"):
+                            file_input.seek(0)
+                        return parse_image_matrix(file_input)
+                except Exception:
+                    pass
+                raise e
 
         # Determinar se é CSV ou Excel
         try:
