@@ -15,11 +15,14 @@ from PIL import Image
 
 from pathlib import Path
 
+# Chaves antigas/revogadas que devem ser ignoradas automaticamente
+REVOKED_KEYS = {
+    "AQ.Ab8RN6LV7L0YNvB5VyjWvileuaJrfeLm5SLmmX8Mn34PCioi7w",
+}
+
 def get_default_api_key() -> str:
-    """Obtém a chave de API das variáveis de ambiente ou do arquivo .env local."""
-    key = os.environ.get("GEMINI_API_KEY", "")
-    if key:
-        return key
+    """Obtém a chave de API ativa do arquivo .env local ou das variáveis de ambiente."""
+    # 1. Prioriza o arquivo .env local
     env_file = Path(__file__).resolve().parent.parent / ".env"
     if env_file.exists():
         try:
@@ -27,13 +30,17 @@ def get_default_api_key() -> str:
                 line = line.strip()
                 if line.startswith("GEMINI_API_KEY="):
                     val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    if val:
+                    if val and val not in REVOKED_KEYS:
                         return val
         except Exception:
             pass
-    return ""
 
-DEFAULT_API_KEY = get_default_api_key()
+    # 2. Variável de ambiente (se válida e não revogada)
+    key = os.environ.get("GEMINI_API_KEY", "")
+    if key and key not in REVOKED_KEYS:
+        return key
+
+    return ""
 
 HYBRID_EXTRACTION_PROMPT = """
 Você é um Engenheiro de Dados especialista em Visão Computacional, Análise de Documentos e Extração Tabular.
@@ -105,9 +112,11 @@ def extract_matrix_with_gemini(
     - Matriz Power BI Saavedra (formato enriquecido com KPIs, BUs e Looker Studio).
     - Tabela genérica (extrai colunas e linhas dinamicamente para exibição e download em Excel/CSV).
     """
-    key = api_key or os.environ.get("GEMINI_API_KEY") or DEFAULT_API_KEY
+    key = api_key if (api_key and api_key not in REVOKED_KEYS) else None
     if not key:
-        raise ValueError("Chave de API do Gemini não configurada.")
+        key = get_default_api_key()
+    if not key:
+        raise ValueError("Chave de API do Gemini não configurada ou inválida.")
 
     # 1. Carregar imagem no PIL
     if isinstance(image_input, Image.Image):

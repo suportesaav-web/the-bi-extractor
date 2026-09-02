@@ -207,7 +207,10 @@ def unpack_hierarchy(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def parse_raw_data(file_input: Union[BinaryIO, io.BytesIO, str, pd.DataFrame]) -> pd.DataFrame:
+def parse_raw_data(
+    file_input: Union[BinaryIO, io.BytesIO, str, pd.DataFrame],
+    api_key: Optional[str] = None,
+) -> pd.DataFrame:
     """Realiza o parsing, higienização, tipagem e normalização completa dos dados do Power BI.
     
     Suporta DataFrames, arquivos Excel (.xlsx, .xls), CSV (.csv) e imagens com OCR (.png, .jpg, .jpeg).
@@ -224,7 +227,7 @@ def parse_raw_data(file_input: Union[BinaryIO, io.BytesIO, str, pd.DataFrame]) -
         file_name_lower = str(file_name).lower()
         if any(file_name_lower.endswith(ext) for ext in [".png", ".jpg", ".jpeg"]):
             try:
-                return extract_matrix_with_gemini(file_input)
+                return extract_matrix_with_gemini(file_input, api_key=api_key)
             except Exception as e:
                 try:
                     from core.image_parser import WINSDK_AVAILABLE

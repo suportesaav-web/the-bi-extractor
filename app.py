@@ -28,7 +28,7 @@ from components.charts import (
 )
 from components.metrics_cards import format_currency_br, render_metrics
 from core.excel_exporter import generate_excel_workbook
-from core.gemini_vision_parser import get_default_api_key
+from core.gemini_vision_parser import REVOKED_KEYS, get_default_api_key
 from core.parser import parse_raw_data
 
 # Configuração da Página
@@ -155,11 +155,11 @@ st.markdown(
 
 
 @st.cache_data(show_spinner=False)
-def process_uploaded_file(file_bytes: bytes, filename: str) -> pd.DataFrame:
+def process_uploaded_file(file_bytes: bytes, filename: str, api_key: Optional[str] = None) -> pd.DataFrame:
     """Processa e normaliza a imagem (via IA Gemini Vision em Modo Híbrido) ou arquivo tabular."""
     buffer = io.BytesIO(file_bytes)
     buffer.name = filename
-    return parse_raw_data(buffer)
+    return parse_raw_data(buffer, api_key=api_key)
 
 
 def build_dataframe_with_total(df: pd.DataFrame) -> pd.DataFrame:
@@ -209,14 +209,15 @@ def main() -> None:
         )
 
         with st.expander("⚙️ Configurações de IA (Gemini)", expanded=False):
+            active_default = get_default_api_key()
             gemini_key = st.text_input(
                 "Chave API do Google GenAI:",
-                value=os.environ.get("GEMINI_API_KEY") or get_default_api_key(),
+                value=active_default,
                 type="password",
                 help="Chave utilizada para extração visual com Gemini Vision.",
             )
-            if gemini_key:
-                os.environ["GEMINI_API_KEY"] = gemini_key
+            if gemini_key and gemini_key.strip() not in REVOKED_KEYS:
+                os.environ["GEMINI_API_KEY"] = gemini_key.strip()
 
         st.divider()
 
@@ -256,16 +257,18 @@ def main() -> None:
         filename_lower = uploaded_file.name.lower()
         is_image = any(filename_lower.endswith(ext) for ext in [".png", ".jpg", ".jpeg"])
 
+        active_key = gemini_key.strip() if (gemini_key and gemini_key.strip() not in REVOKED_KEYS) else get_default_api_key()
+
         if is_image:
             image_preview = Image.open(uploaded_file)
             uploaded_file.seek(0)
             with st.spinner("🤖 IA analisando imagem em Modo Híbrido (detectando tabelas e colunas)..."):
                 file_bytes = uploaded_file.getvalue()
-                df_raw_tidy = process_uploaded_file(file_bytes, uploaded_file.name)
+                df_raw_tidy = process_uploaded_file(file_bytes, uploaded_file.name, api_key=active_key)
         else:
             with st.spinner("Processando e normalizando arquivo tabular..."):
                 file_bytes = uploaded_file.getvalue()
-                df_raw_tidy = process_uploaded_file(file_bytes, uploaded_file.name)
+                df_raw_tidy = process_uploaded_file(file_bytes, uploaded_file.name, api_key=active_key)
 
         st.sidebar.success(f"✓ {len(df_raw_tidy)} linhas extraídas com sucesso!")
     except Exception as e:
