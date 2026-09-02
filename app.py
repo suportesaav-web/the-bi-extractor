@@ -28,7 +28,7 @@ from components.charts import (
 )
 from components.metrics_cards import format_currency_br, render_metrics
 from core.excel_exporter import generate_excel_workbook
-from core.gemini_vision_parser import REVOKED_KEYS, get_default_api_key
+from core.gemini_vision_parser import REVOKED_KEYS, get_default_api_key, pdf_to_preview_images
 from core.parser import parse_raw_data
 
 # Configuração da Página
@@ -200,12 +200,12 @@ def main() -> None:
         st.caption("Extrator Visual via IA • Modo Híbrido")
         st.divider()
 
-        # Upload de Imagens (PNG, JPG) ou Planilhas (Excel, CSV)
-        st.markdown("#### 📷 Ingestão de Imagem / Arquivo")
+        # Upload de Imagens (PNG, JPG), Documentos (PDF) ou Planilhas (Excel, CSV)
+        st.markdown("#### 📥 Ingestão de Arquivo")
         uploaded_file = st.file_uploader(
-            "Faça o upload de imagem ou planilha:",
-            type=["png", "jpg", "jpeg", "xlsx", "xls", "csv"],
-            help="Envie qualquer imagem com tabela (Modo Híbrido) ou planilha para extração automática com IA.",
+            "Faça o upload de imagem, PDF ou planilha:",
+            type=["png", "jpg", "jpeg", "pdf", "xlsx", "xls", "csv"],
+            help="Envie captura de tela (PNG/JPG), documento PDF ou planilha (Excel/CSV) para extração automática com IA.",
         )
 
         with st.expander("⚙️ Configurações de IA (Gemini)", expanded=False):
@@ -214,7 +214,7 @@ def main() -> None:
                 "Chave API do Google GenAI:",
                 value=active_default,
                 type="password",
-                help="Chave utilizada para extração visual com Gemini Vision.",
+                help="Chave utilizada para extração visual e de documentos com Gemini Vision.",
             )
             if gemini_key and gemini_key.strip() not in REVOKED_KEYS:
                 os.environ["GEMINI_API_KEY"] = gemini_key.strip()
@@ -226,7 +226,7 @@ def main() -> None:
         """
         <div class="app-header">
             <h1>⚡ The BI Extractor</h1>
-            <p>Extração inteligente com IA (Gemini Vision) em Modo Híbrido: Matrizes Power BI e Tabelas Genéricas.</p>
+            <p>Extração inteligente com IA (Gemini Vision) em Modo Híbrido: Matrizes Power BI e Tabelas Genéricas a partir de Imagens, PDFs e Planilhas.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -237,11 +237,11 @@ def main() -> None:
         st.markdown(
             """
             <div class="welcome-card">
-                <h3>📷 Aguardando Imagem ou Arquivo</h3>
+                <h3>📥 Aguardando Imagem, PDF ou Planilha</h3>
                 <p>
                     Nenhum arquivo carregado ainda.<br>
-                    Utilize a <b>barra lateral à esquerda</b> para anexar o print de tela (PNG / JPG) ou planilha (Excel / CSV).<br><br>
-                    💡 <b>Modo Híbrido Ativo:</b> A IA detecta tanto matrizes do Power BI Saavedra quanto qualquer outra tabela genérica.
+                    Utilize a <b>barra lateral à esquerda</b> para anexar captura de tela (PNG / JPG), relatório (PDF) ou planilha (Excel / CSV).<br><br>
+                    💡 <b>Modo Híbrido Ativo:</b> A IA detecta e estrutura tanto matrizes do Power BI Saavedra quanto qualquer outra tabela genérica.
                 </p>
             </div>
             """,
@@ -251,19 +251,28 @@ def main() -> None:
 
     # 2. PROCESSAMENTO DO ARQUIVO ANEXADO
     df_raw_tidy: Optional[pd.DataFrame] = None
-    image_preview: Optional[Image.Image] = None
+    preview_images: List[Image.Image] = []
+    is_image = False
+    is_pdf = False
 
     try:
         filename_lower = uploaded_file.name.lower()
         is_image = any(filename_lower.endswith(ext) for ext in [".png", ".jpg", ".jpeg"])
+        is_pdf = filename_lower.endswith(".pdf")
 
         active_key = gemini_key.strip() if (gemini_key and gemini_key.strip() not in REVOKED_KEYS) else get_default_api_key()
 
         if is_image:
             image_preview = Image.open(uploaded_file)
+            preview_images = [image_preview]
             uploaded_file.seek(0)
             with st.spinner("🤖 IA analisando imagem em Modo Híbrido (detectando tabelas e colunas)..."):
                 file_bytes = uploaded_file.getvalue()
+                df_raw_tidy = process_uploaded_file(file_bytes, uploaded_file.name, api_key=active_key)
+        elif is_pdf:
+            file_bytes = uploaded_file.getvalue()
+            preview_images = pdf_to_preview_images(file_bytes, max_pages=3)
+            with st.spinner("🤖 IA analisando documento PDF em Modo Híbrido (processando páginas e tabelas)..."):
                 df_raw_tidy = process_uploaded_file(file_bytes, uploaded_file.name, api_key=active_key)
         else:
             with st.spinner("Processando e normalizando arquivo tabular..."):
@@ -273,9 +282,11 @@ def main() -> None:
         st.sidebar.success(f"✓ {len(df_raw_tidy)} linhas extraídas com sucesso!")
     except Exception as e:
         st.error(f"❌ {str(e)}")
-        if image_preview is not None:
-            with st.expander("🖼️ Visualizar Imagem Enviada", expanded=True):
-                st.image(image_preview, caption="Imagem analisada", use_container_width=True)
+        if preview_images:
+            title = "🖼️ Visualizar Imagem Enviada" if is_image else "📄 Visualizar Documento PDF Enviado"
+            with st.expander(title, expanded=True):
+                for i, p_img in enumerate(preview_images):
+                    st.image(p_img, caption=f"Página {i+1}" if len(preview_images) > 1 else "Documento analisado", use_container_width=True)
         return
 
     if df_raw_tidy is None or df_raw_tidy.empty:
@@ -293,10 +304,13 @@ def main() -> None:
         )
     )
 
-    # Preview da Imagem Original
-    if image_preview is not None:
-        with st.expander("🖼️ Visualizar Imagem Original Enviada", expanded=False):
-            st.image(image_preview, caption="Imagem carregada", use_container_width=True)
+    # Preview do Arquivo Original (Imagem ou PDF)
+    if preview_images:
+        title = "🖼️ Visualizar Imagem Original Enviada" if is_image else f"📄 Visualizar Documento PDF Original ({len(preview_images)} pág{'s' if len(preview_images) > 1 else ''})"
+        with st.expander(title, expanded=False):
+            for i, p_img in enumerate(preview_images):
+                caption = "Imagem carregada" if is_image else f"Página {i+1} do PDF"
+                st.image(p_img, caption=caption, use_container_width=True)
 
     # ---------------------------------------------------------
     # RAMO 1: MATRIZ POWER BI SAAVEDRA (Dashboard Completo)

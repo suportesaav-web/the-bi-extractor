@@ -54,14 +54,14 @@ def get_default_api_key() -> str:
 
 HYBRID_EXTRACTION_PROMPT = """
 Você é um Engenheiro de Dados especialista em Visão Computacional, Análise de Documentos e Extração Tabular.
-Analise a imagem fornecida minuciosamente.
+Analise a imagem ou documento PDF fornecido minuciosamente.
 
 Seu objetivo é:
-1. Detectar se a imagem contém alguma tabela, matriz (como Power BI, Excel, grade com linhas e colunas, extrato ou relatório tabular).
+1. Detectar se o arquivo contém alguma tabela, matriz (como Power BI, Excel, grade com linhas e colunas, extrato ou relatório tabular).
 2. Se NÃO houver nenhuma tabela ou dados estruturados em linhas/colunas, retorne:
 {
   "has_table": false,
-  "message": "Nenhuma tabela ou matriz de dados visível foi identificada nesta imagem. Por favor, envie uma captura que contenha uma tabela ou planilha legível."
+  "message": "Nenhuma tabela ou matriz de dados visível foi identificada neste arquivo. Por favor, envie uma captura ou documento que contenha uma tabela ou planilha legível."
 }
 
 3. Se HOUVER tabela, identifique se ela é uma matriz do Power BI / Saavedra ou uma tabela genérica:
@@ -88,7 +88,7 @@ Para este caso, extraia APENAS as linhas de detalhe de portfólio (sem linhas de
 }
 
 CENÁRIO B - Qualquer Outra Tabela (Tabela Genérica):
-Critérios: Qualquer outra tabela (financeira, estoque, vendas, lista de clientes, notas, faturas, etc.) que não seja a matriz específica Saavedra Power BI.
+Critérios: Qualquer outra tabela (financeira, estoque, vendas, lista de clientes, notas, faturas, relatórios) que não seja a matriz específica Saavedra Power BI.
 Para este caso, extraia TODOS os cabeçalhos de colunas e TODAS as linhas visíveis:
 {
   "has_table": true,
@@ -111,13 +111,51 @@ IMPORTANTE:
 """
 
 
+def pdf_to_preview_images(
+    pdf_input: Union[bytes, io.BytesIO, str, Any],
+    max_pages: int = 3,
+) -> List[Image.Image]:
+    """Renderiza as primeiras páginas de um arquivo PDF como imagens PIL para exibição na interface."""
+    try:
+        import pypdfium2 as pdfium
+
+        if isinstance(pdf_input, io.BytesIO):
+            data = pdf_input.getvalue()
+        elif isinstance(pdf_input, bytes):
+            data = pdf_input
+        elif isinstance(pdf_input, str):
+            with open(pdf_input, "rb") as f:
+                data = f.read()
+        elif hasattr(pdf_input, "getvalue"):
+            data = pdf_input.getvalue()
+        elif hasattr(pdf_input, "read"):
+            pos = pdf_input.tell() if hasattr(pdf_input, "tell") else 0
+            data = pdf_input.read()
+            if hasattr(pdf_input, "seek"):
+                pdf_input.seek(pos)
+        else:
+            return []
+
+        doc = pdfium.PdfDocument(data)
+        num_pages = min(len(doc), max_pages)
+        images: List[Image.Image] = []
+        for i in range(num_pages):
+            page = doc[i]
+            pil_image = page.render(scale=2).to_pil()
+            images.append(pil_image)
+        return images
+    except Exception:
+        return []
+
+
 def extract_matrix_with_gemini(
-    image_input: Union[bytes, io.BytesIO, str, Image.Image],
+    file_input: Union[bytes, io.BytesIO, str, Image.Image, Any],
     api_key: Optional[str] = None,
+    filename: Optional[str] = None,
 ) -> pd.DataFrame:
-    """Extrai os dados da imagem em Modo Híbrido usando a API multimodal do Google Gemini.
+    """Extrai os dados da imagem ou PDF em Modo Híbrido usando a API multimodal do Google Gemini.
     
-    Identifica automaticamente se a imagem possui:
+    Identifica automaticamente se o arquivo possui:
     - Nenhuma tabela (avisa o usuário amigavelmente).
     - Matriz Power BI Saavedra (formato enriquecido com KPIs, BUs e Looker Studio).
     - Tabela genérica (extrai colunas e linhas dinamicamente para exibição e download em Excel/CSV).
@@ -128,16 +166,40 @@ def extract_matrix_with_gemini(
     if not key:
         raise ValueError("Chave de API do Gemini não configurada ou inválida.")
 
-    # 1. Carregar imagem no PIL
-    if isinstance(image_input, Image.Image):
-        pil_img = image_input
-    elif isinstance(image_input, (bytes, io.BytesIO)):
-        data_bytes = image_input.getvalue() if isinstance(image_input, io.BytesIO) else image_input
-        pil_img = Image.open(io.BytesIO(data_bytes))
-    elif isinstance(image_input, str):
-        pil_img = Image.open(image_input)
+    # 1. Identificar formato (PDF vs Imagem) e preparar conteúdo multimodal
+    contents_to_send = []
+
+    name_hint = (filename or getattr(file_input, "name", "") or (file_input if isinstance(file_input, str) else "")).lower()
+
+    if isinstance(file_input, Image.Image):
+        contents_to_send = [file_input, HYBRID_EXTRACTION_PROMPT]
     else:
-        raise ValueError("Formato de imagem não suportado.")
+        # Obter bytes
+        if isinstance(file_input, (bytes, io.BytesIO)):
+            raw_bytes = file_input.getvalue() if isinstance(file_input, io.BytesIO) else file_input
+        elif isinstance(file_input, str):
+            with open(file_input, "rb") as f:
+                raw_bytes = f.read()
+        elif hasattr(file_input, "getvalue"):
+            raw_bytes = file_input.getvalue()
+        elif hasattr(file_input, "read"):
+            pos = file_input.tell() if hasattr(file_input, "tell") else 0
+            raw_bytes = file_input.read()
+            if hasattr(file_input, "seek"):
+                file_input.seek(pos)
+        else:
+            raise ValueError("Formato de arquivo de entrada não suportado.")
+
+        # Verificar se é PDF (assinatura mágica %PDF ou extensão)
+        is_pdf = raw_bytes.startswith(b"%PDF") or name_hint.endswith(".pdf")
+
+        if is_pdf:
+            pdf_part = types.Part.from_bytes(data=raw_bytes, mime_type="application/pdf")
+            contents_to_send = [pdf_part, HYBRID_EXTRACTION_PROMPT]
+        else:
+            # Imagem normal (PNG, JPG, etc.)
+            pil_img = Image.open(io.BytesIO(raw_bytes))
+            contents_to_send = [pil_img, HYBRID_EXTRACTION_PROMPT]
 
     # 2. Inicializar cliente oficial do Google GenAI
     client = genai.Client(api_key=key)
@@ -149,7 +211,7 @@ def extract_matrix_with_gemini(
         try:
             response = client.models.generate_content(
                 model=model_name,
-                contents=[pil_img, HYBRID_EXTRACTION_PROMPT],
+                contents=contents_to_send,
                 config=types.GenerateContentConfig(response_mime_type="application/json"),
             )
             if response and response.text:
@@ -159,7 +221,7 @@ def extract_matrix_with_gemini(
             continue
 
     if not response or not response.text:
-        err_msg = f"Falha ao processar imagem com Gemini Vision: {last_error}" if last_error else "Resposta vazia do modelo."
+        err_msg = f"Falha ao processar arquivo com Gemini Vision: {last_error}" if last_error else "Resposta vazia do modelo."
         raise RuntimeError(err_msg)
 
     # 3. Decodificar JSON
