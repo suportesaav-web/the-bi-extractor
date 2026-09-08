@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import re
+from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
@@ -157,11 +158,13 @@ def unpack_hierarchy(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
     Analisa os recuos e prefixos de hierarquia como '└' para rastrear níveis em cascata:
     Nível 0: Customer Group (ex: SAAVEDRA)
     Nível 1: Business Unit (ex: MDS, PI, UCC)
-    Nível 2: Portfolio (ex: Bone, Ports, Chronic Dialysis, AAD)
+    Nível 2: Portfolio (ex: Bone, Ports, Chronic Dialysis, AAD) - nós-folha
     """
     records: List[Dict[str, Any]] = []
     current_customer_group = "SAAVEDRA"
     current_bu = "Geral"
+
+    known_bus = {"MDS", "PI", "UCC", "DIABETES", "VASCULAR", "CIRURGICO", "SURGICAL", "HOSPITALAR"}
 
     for idx, row in df.iterrows():
         raw_val = row[col_name]
@@ -183,20 +186,19 @@ def unpack_hierarchy(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
         leading_spaces = len(raw_str) - len(raw_str.lstrip())
 
         # Análise do nível
-        # Nível 0: Sem símbolos e sem espaços (ex: SAAVEDRA)
-        if not has_symbol and leading_spaces < 2:
+        # Nível 0: Customer Group (ex: SAAVEDRA)
+        if (not has_symbol and leading_spaces < 2) or clean_text.upper() in ("SAAVEDRA", "GRUPO SAAVEDRA"):
             current_customer_group = clean_text
             continue
 
-        # Nível 1: Business Unit (ex: MDS, PI, UCC ou 1 símbolo)
-        # Se o texto for curto ou se for uma sigla conhecida ou primeiro nível de indentação
-        if (has_symbol and leading_spaces < 4) or (clean_text in ["MDS", "PI", "UCC", "DIABETES", "VASCULAR", "CIRURGICO"]):
+        # Nível 1: Business Unit (ex: MDS, PI, UCC)
+        # Se for sigla de BU ou nível intermediário sem portfólio
+        if clean_text.upper() in known_bus or (has_symbol and leading_spaces <= 4 and len(clean_text) <= 5 and clean_text.isupper()):
             current_bu = clean_text
-            # Se for linha de consolidado da BU com valores
-            portfolio_item = f"Consolidado {current_bu}"
-        else:
-            # Nível 2: Portfolio específico
-            portfolio_item = clean_text
+            continue
+
+        # Nível 2: Portfolio específico (nó-folha de dados real)
+        portfolio_item = clean_text
 
         row_dict = row.to_dict()
         row_dict["Customer Group"] = current_customer_group
@@ -211,13 +213,17 @@ def parse_raw_data(
     file_input: Union[BinaryIO, io.BytesIO, str, pd.DataFrame],
     api_key: Optional[str] = None,
 ) -> pd.DataFrame:
-    """Realiza o parsing, higienização, tipagem e normalização completa dos dados do Power BI.
+    """Realiza o parsing, higienização, tipagem e normalização completa dos dados.
     
-    Suporta DataFrames, arquivos Excel (.xlsx, .xls), CSV (.csv) e imagens com OCR (.png, .jpg, .jpeg).
+    Suporta Modo Híbrido:
+    - Matrizes Power BI Saavedra (regras de hierarquia, reconciliação monetária e KPIs)
+    - Tabelas Genéricas (CSV/Excel com colunas e dados preservados dinamicamente)
+    - Imagens (via IA Gemini Vision ou OCR)
     """
     # 1. Se for DataFrame
     if isinstance(file_input, pd.DataFrame):
         df_raw = file_input.copy()
+        file_name = "tabela"
     else:
         # Verificar se é arquivo de imagem
         file_name = getattr(file_input, "name", "")
@@ -225,19 +231,18 @@ def parse_raw_data(
             file_name = file_input
 
         file_name_lower = str(file_name).lower()
-        if any(file_name_lower.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".pdf"]):
+        if any(file_name_lower.endswith(ext) for ext in [".png", ".jpg", ".jpeg"]):
             try:
-                return extract_matrix_with_gemini(file_input, api_key=api_key, filename=file_name_lower)
+                return extract_matrix_with_gemini(file_input, api_key=api_key)
             except Exception as e:
-                if not file_name_lower.endswith(".pdf"):
-                    try:
-                        from core.image_parser import WINSDK_AVAILABLE
-                        if WINSDK_AVAILABLE and "Nenhuma tabela" not in str(e):
-                            if hasattr(file_input, "seek"):
-                                file_input.seek(0)
-                            return parse_image_matrix(file_input)
-                    except Exception:
-                        pass
+                try:
+                    from core.image_parser import WINSDK_AVAILABLE
+                    if WINSDK_AVAILABLE and "Nenhuma tabela" not in str(e):
+                        if hasattr(file_input, "seek"):
+                            file_input.seek(0)
+                        return parse_image_matrix(file_input)
+                except Exception:
+                    pass
                 raise e
 
         # Determinar se é CSV ou Excel
@@ -262,6 +267,38 @@ def parse_raw_data(
     # 2. Identificar Colunas
     mapping = identify_columns(df_raw)
 
+    # Identificar se é Matriz Power BI Saavedra ou Tabela Genérica
+    is_powerbi = any(
+        mapping[k] is not None
+        for k in ["fy26_pps", "gross_sales_billed", "gross_sales_open", "total_gross"]
+    )
+
+    # -------------------------------------------------------------
+    # CASO TABELA GENÉRICA (Modo Híbrido)
+    # -------------------------------------------------------------
+    if not is_powerbi:
+        df_generic = df_raw.copy()
+        df_generic.columns = [str(c).strip() for c in df_generic.columns]
+
+        # Converter colunas numéricas de strings para float quando aplicável
+        for col in df_generic.columns:
+            if df_generic[col].dtype == object:
+                try:
+                    sample = df_generic[col].dropna().astype(str).str.strip()
+                    if not sample.empty and sample.str.match(r"^[\d.,\-+() R$€£%]+$").all():
+                        df_generic[col] = df_generic[col].apply(parse_numeric_value)
+                except Exception:
+                    pass
+
+        df_generic.attrs["is_powerbi"] = False
+        df_generic.attrs["table_type"] = "generic_table"
+        table_title = Path(str(file_name)).stem if file_name else "Tabela Extraída"
+        df_generic.attrs["table_title"] = table_title.replace("_", " ").title()
+        return df_generic
+
+    # -------------------------------------------------------------
+    # CASO MATRIZ POWER BI SAAVEDRA
+    # -------------------------------------------------------------
     # 3. Desmembrar Hierarquia se necessário
     if mapping["hierarchy_col"] and (not mapping["business_unit"] or not mapping["portfolio"]):
         df_processed = unpack_hierarchy(df_raw, mapping["hierarchy_col"])
@@ -293,7 +330,6 @@ def parse_raw_data(
     billed_col = mapping["gross_sales_billed"]
     open_col = mapping["gross_sales_open"]
     total_col = mapping["total_gross"]
-    ating_col = mapping["ating_pps"]
 
     df_clean = pd.DataFrame()
     df_clean["Customer Group"] = df_processed["Customer Group"].astype(str).replace("", "SAAVEDRA")
@@ -345,7 +381,12 @@ def parse_raw_data(
         "% PPs",
     ]
 
-    return df_clean[target_columns]
+    result_df = df_clean[target_columns].copy()
+    result_df.attrs["is_powerbi"] = True
+    result_df.attrs["table_type"] = "powerbi_matrix"
+    result_df.attrs["table_title"] = "Matriz Power BI Saavedra"
+    return result_df
+
 
 
 def get_sample_data() -> pd.DataFrame:

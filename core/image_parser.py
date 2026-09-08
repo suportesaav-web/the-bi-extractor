@@ -301,27 +301,10 @@ def parse_image_matrix(image_source: Union[bytes, io.BytesIO, str]) -> pd.DataFr
             elif fy26_val == 0.0 and ating_val != 0.0 and total_gross > 0:
                 fy26_val = round(total_gross - ating_val, 2)
 
-            # Correções defensivas de caracteres específicos do Power BI
-            if portfolio_name == "Hydrophilic Urethral Catheters" and fy26_val < 40000:
-                fy26_val = 80340.00
-            elif portfolio_name == "Core Needle Biopsy" and fy26_val > 1320000:
-                fy26_val = 1320000.00
-            elif portfolio_name == "Ports" and fy26_val > 1555000:
-                fy26_val = 1555000.00
-            elif portfolio_name == "Dignishield" and billed_val == 37330.00:
-                billed_val = 37830.00
-                total_gross = billed_val + open_val
-            elif portfolio_name == "Encor Probes" and open_val < 10000:
-                open_val = 52874.25
-                total_gross = billed_val + open_val
-            elif portfolio_name == "AAD":
-                billed_val = 1457244.35
-                open_val = 9086.82
-                total_gross = billed_val + open_val
-
             # 3. Recálculo garantido das colunas de resultado
             ating_pps = total_gross - fy26_val
             perc_pps = (total_gross / fy26_val) if fy26_val > 0 else 0.0
+
 
             records.append(
                 {
