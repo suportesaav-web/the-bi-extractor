@@ -11,7 +11,7 @@
 [![Excel](https://img.shields.io/badge/Microsoft_Excel-OpenPyXL-217346?style=for-the-badge&logo=microsoftexcel&logoColor=white)](https://openpyxl.readthedocs.io/)
 
 <p align="center">
-  <b>Transforme exportações brutas do Power BI, faturas em PDF e capturas de tela em bases Tidy Data perfeitamente estruturadas para o Looker Studio e planilhas corporativas com fórmulas ativas.</b>
+  <b>Transforme capturas de tela e exportações brutas em bases Tidy Data perfeitamente estruturadas para o Looker Studio e planilhas corporativas com fórmulas ativas via IA Multimodal em Modo Híbrido.</b>
 </p>
 
 <p align="center">
@@ -28,9 +28,11 @@
 
 ## 📌 Visão Geral
 
-O **The BI Extractor** é uma solução de engenharia de dados e Business Intelligence corporativo que elimina o gargalo manual de higienização de matrizes do **Power BI** (árvores hierárquicas desestruturadas com caracteres `└`, números formatados como texto e células mescladas) e relatórios em **PDF/Imagens**.
+O **The BI Extractor** é uma solução de engenharia de dados e Business Intelligence corporativo que elimina o retrabalho manual de higienização de matrizes do **Power BI** (árvores hierárquicas desestruturadas com caracteres `└`, números formatados como texto e células mescladas), prints de tela e planilhas genéricas.
 
-Equipado com **IA Multimodal (Google Gemini Vision)** e motor de cálculo defensivo em **Pandas**, o pipeline reconcilia valores monetários, detecta níveis hierárquicos e entrega saídas executivas imediatas.
+Equipado com **IA Multimodal (Google Gemini Vision 3.6 Flash / Flash Latest)** com fallback automático e motor de cálculo defensivo em **Pandas**, o pipeline reconcilia valores monetários, detecta níveis hierárquicos e entrega saídas executivas imediatas em **Modo Híbrido**:
+1. **Matriz Power BI Saavedra**: Desmembramento de Customer Group, Business Unit e Portfólio, reconciliação monetária, cálculo dinâmico de metas/gaps, dashboard de KPIs e gráficos analíticos.
+2. **Tabela Genérica**: Extração dinâmica de qualquer tabela (produtos, finanças, estoque ou clientes) a partir de imagens ou arquivos CSV/Excel, preservando integralmente suas colunas e dados.
 
 ---
 
@@ -39,12 +41,12 @@ Equipado com **IA Multimodal (Google Gemini Vision)** e motor de cálculo defens
 ```
 [ Entrada: Dados Brutos & Hierarquias ]               [ Motor de Processamento ]             [ Saídas Corporativas Prontas ]
 ┌──────────────────────────────────────┐             ┌─────────────────────────┐            ┌─────────────────────────────────────────┐
-│ Exportação Power BI / Print / PDF    │             │  The BI Extractor       │            │ 1. Mini-BI Interativo (Web Dashboard)   │
+│ Captura de Tela (PNG/JPG) ou Planilha │             │  The BI Extractor       │            │ 1. Mini-BI Interativo (Web Dashboard)   │
 │                                      │             │                         │            │    ├─ Cards de KPIs e Gap de Meta       │
 │ └ SAAVEDRA (Customer Group)          │  ─────────► │  • Gemini Vision AI     │  ────────► │    └─ Gráficos de Metas e Portfólios    │
 │   ├── MDS (Business Unit)            │             │  • Parser Hierárquico   │            │ 2. Excel Corporativo (.xlsx)            │
 │   │   └── AAD (Portfolio)            │             │  • Reconciliação Tidy   │            │    └─ Estilo Navy Blue + Fórmulas SUM   │
-│   └── PI (Business Unit)             │             │                         │            │ 3. CSV Google Looker Studio (.csv)      │
+│   └── PI (Business Unit)             │             │  • Modo Híbrido Ativo   │            │ 3. CSV Google Looker Studio (.csv)      │
 │       └── Ports (Portfolio)          │             │                         │            │    └─ UTF-8 BOM Tidy Data Normalizado   │
 └──────────────────────────────────────┘             └─────────────────────────┘            └─────────────────────────────────────────┘
 ```
@@ -59,12 +61,10 @@ Equipado com **IA Multimodal (Google Gemini Vision)** e motor de cálculo defens
 
 ### 📥 Entradas Suportadas
 
-* **📄 Documentos & Relatórios (`.pdf`)**
-  * Relatórios contábeis, faturas e relatórios multipáginas analisados diretamente por IA multimodal.
-* **🖼️ Capturas de Tela (`.png`, `.jpg`, `.jpeg`)**
-  * Prints de matrizes do Power BI ou ERPs com tabelas na tela.
-* **📊 Planilhas & Arquivos de Dados (`.xlsx`, `.xls`, `.csv`)**
-  * Matrizes hierárquicas brutas e exportações com separadores `,` ou `;`.
+* **🖼️ Capturas de Tela & Imagens (`.png`, `.jpg`, `.jpeg`)**
+  * Prints de matrizes do Power BI, dashboards, sistemas ERP ou fotos de tabelas impressas analisadas via visão computacional do Gemini.
+* **📊 Planilhas & Arquivos Tabulares (`.xlsx`, `.xls`, `.csv`)**
+  * Matrizes hierárquicas brutas e exportações com delimitadores `,` ou `;`, com detecção inteligente de formato.
 
 </td>
 <td width="50%" valign="top">
@@ -72,11 +72,11 @@ Equipado com **IA Multimodal (Google Gemini Vision)** e motor de cálculo defens
 ### 📤 Saídas Geradas
 
 * **📊 Mini-BI Executivo Integrado**
-  * Visualização reativa em tela: cards de atingimento, gap financeiro e gráficos Plotly.
+  * Visualização reativa: cards de faturamento, metas, gap financeiro e gráficos Plotly comparativos.
 * **📑 Excel Corporativo (`.xlsx`)**
-  * Cabeçalho executivo `#1F4E78` (*Navy Blue*), linhas zebradas, formatação `R$ #,##0.00` e fórmulas dinâmicas (`=SUM(...)`).
-* **📈 CSV Google Looker Studio Ready (`.csv`)**
-  * Granularidade 1 linha por portfólio (Tidy Data), codificação UTF-8 com BOM para upload imediato sem retrabalho de ETL.
+  * Cabeçalho executivo `#1F4E78` (*Navy Blue*), linhas zebradas, formatação de moeda e fórmulas dinâmicas (`=SUM(...)`).
+* **📈 CSV Pronto para Looker Studio (`.csv`)**
+  * Granularidade 1 linha por portfólio (Tidy Data), codificação **UTF-8 com BOM** para abertura perfeita no Microsoft Excel e Looker Studio sem corrupção de acentuação.
 
 </td>
 </tr>
@@ -84,38 +84,14 @@ Equipado com **IA Multimodal (Google Gemini Vision)** e motor de cálculo defens
 
 ---
 
-## 📸 Demonstração Visual da Aplicação
+## 🤖 Modo Híbrido Inteligente
 
-<div align="center">
+O extrator detecta automaticamente o conteúdo fornecido:
 
-<table width="100%">
-<tr>
-<td width="50%" align="center">
-  <b>📊 1. Mini-BI Executivo Integrado</b><br>
-  <img src="docs/screenshots/mini_bi_dashboard.png" alt="Mini-BI Dashboard" width="100%" style="border-radius: 8px; border: 1px solid #E2E8F0;" /><br>
-  <sub><i>KPIs de Meta, Gap Financeiro, Performance por BU e Top Portfólios</i></sub>
-</td>
-<td width="50%" align="center">
-  <b>📑 2. Planilha Excel Estilizada (.xlsx)</b><br>
-  <img src="docs/screenshots/excel_corporate.png" alt="Planilha Excel Formatada" width="100%" style="border-radius: 8px; border: 1px solid #E2E8F0;" /><br>
-  <sub><i>Cabeçalho Navy Blue corporativo, efeito zebrado e fórmulas nativas</i></sub>
-</td>
-</tr>
-<tr>
-<td width="50%" align="center">
-  <b>📥 3. Arquivo / Documento de Entrada</b><br>
-  <img src="docs/screenshots/input_preview.png" alt="Documento Original" width="100%" style="border-radius: 8px; border: 1px solid #E2E8F0;" /><br>
-  <sub><i>Relatório em PDF ou captura de tela bruta com nós hierárquicos</i></sub>
-</td>
-<td width="50%" align="center">
-  <b>📋 4. Matriz Tidy Data Normalizada</b><br>
-  <img src="docs/screenshots/tidy_table.png" alt="Tabela Tidy Data" width="100%" style="border-radius: 8px; border: 1px solid #E2E8F0;" /><br>
-  <sub><i>Dados desacoplados e higienizados prontos para ingestão e auditoria</i></sub>
-</td>
-</tr>
-</table>
-
-</div>
+| Modo | Identificação | Tratamento Aplicado | Saídas e Recursos |
+| :--- | :--- | :--- | :--- |
+| **Matriz Power BI Saavedra** | Contém hierarquias (*Customer Group*, *BU*, *Portfólio*) e métricas de vendas (*FY26 PPs*, *Billed*, *Open*, *Total Gross*). | Normalização estrita Tidy Data, eliminação de duplicações de subtotais e reconciliação matemática. | Dashboard de KPIs, Gráficos por BU/Portfólio, Filtros, Excel com Fórmulas e CSV Looker Studio. |
+| **Tabela Genérica** | Qualquer tabela comercial, contábil ou cadastral (produtos, estoque, faturamento genérico). | Identificação dinâmica de colunas, tipagem numérica automática e preservação integral dos registros. | Tabela interativa com busca rápida, contadores de linhas/colunas e exportação em Excel e CSV padronizado. |
 
 ---
 
@@ -124,10 +100,11 @@ Equipado com **IA Multimodal (Google Gemini Vision)** e motor de cálculo defens
 | Camada | Tecnologia | Função Principal |
 | :--- | :--- | :--- |
 | **Frontend & UI** | `Streamlit 1.30+` | Interface executiva reativa, filtros dinâmicos e controle de visualizações |
-| **Visão Computacional & IA** | `Google GenAI SDK (Gemini Vision)` | Extração multimodal inteligente em Modo Híbrido de imagens e PDFs |
-| **Renderização de Documentos**| `Pypdfium2` & `Pillow` | Renderização ultrarrápida de páginas PDF e tratamento de imagens |
-| **Engenharia de Dados** | `Pandas` | Desmembramento hierárquico em cascata e normalização Tidy Data |
-| **Exportação Corporativa** | `Openpyxl` | Geração de planilhas Excel formatadas com fórmulas analíticas nativas |
+| **Visão Computacional & IA** | `Google GenAI SDK (Gemini Vision)` | Extração multimodal inteligente via modelos `gemini-3.6-flash` e `gemini-flash-latest` |
+| **Resiliência e Alta Disponibilidade** | `Multi-Key Pool & Exponential Backoff` | Contingência automática entre `GEMINI_API_KEY` e `GEMINI_API_KEY_BACKUP` e proteção contra 503/429 |
+| **Processamento de Imagens** | `Pillow (PIL)` | Ingestão, conversão e manipulação de imagens pré-inferência |
+| **Engenharia de Dados** | `Pandas` | Desmembramento hierárquico em cascata, normalização Tidy Data e higienização numérica |
+| **Exportação Corporativa** | `Openpyxl` | Geração de planilhas Excel formatadas em Navy Blue com fórmulas analíticas nativas |
 | **Visualizações Analíticas** | `Plotly Express / Graph Objects` | Gráficos interativos com tooltips e comparativos de metas |
 
 ---
@@ -137,13 +114,14 @@ Equipado com **IA Multimodal (Google Gemini Vision)** e motor de cálculo defens
 ```
 the-bi-extractor/
 ├── .gitignore
+├── .env.example
 ├── README.md
 ├── requirements.txt
-├── app.py                         # Aplicação Streamlit (UI, upload multimodal e orquestração)
+├── app.py                         # Aplicação Streamlit (UI, filtros, Modo Híbrido e orquestração)
 ├── core/
 │   ├── __init__.py
-│   ├── parser.py                  # Roteamento de ingestão, higienização e cálculos de negócio
-│   ├── gemini_vision_parser.py    # Motor multimodal Gemini (visão computacional para imagens e PDFs)
+│   ├── parser.py                  # Roteamento de ingestão, higienização, Modo Híbrido e Tidy Data
+│   ├── gemini_vision_parser.py    # Motor multimodal Gemini (resiliência, pool de chaves e retentativas)
 │   ├── image_parser.py            # OCR local de contingência (Windows Media OCR)
 │   └── excel_exporter.py          # Renderizador de arquivo Excel (.xlsx) com estilos e fórmulas
 ├── components/
@@ -151,7 +129,7 @@ the-bi-extractor/
 │   ├── metrics_cards.py           # KPIs executivos (Total Gross, Atingimento, Gap de Meta)
 │   └── charts.py                  # Gráficos interativos em Plotly (Performance por BU e Portfólio)
 └── docs/
-    └── screenshots/               # Imagens e capturas de tela de demonstração do README
+    └── screenshots/               # Ativos de documentação
 ```
 
 ---
@@ -183,11 +161,13 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Configurar a Chave do Gemini (Opcional)
-Crie um arquivo `.env` na raiz do projeto ou insira diretamente na barra lateral da aplicação:
+### 4. Configurar as Chaves do Gemini (Alta Disponibilidade)
+Crie um arquivo `.env` na raiz do projeto ou configure na barra lateral da aplicação:
 ```env
-GEMINI_API_KEY=sua_chave_aqui
+GEMINI_API_KEY="sua_chave_primaria"
+GEMINI_API_KEY_BACKUP="sua_chave_secundaria_opcional"
 ```
+> O sistema utiliza a chave primária e, caso ela sofra limite de cota ou instabilidade, comuta de forma transparente para a chave backup.
 
 ### 5. Iniciar a Aplicação
 ```bash
@@ -202,15 +182,16 @@ Acesse no seu navegador: `http://localhost:8501`.
 
 <br>
 
-1. Faça o push do projeto para o seu repositório no GitHub: `https://github.com/suportesaav-web/the-bi-extractor`.
-2. Acesse [share.streamlit.io](https://share.streamlit.io/) e realize login com seu GitHub.
+1. Faça o push do projeto para o repositório GitHub: `https://github.com/suportesaav-web/the-bi-extractor`.
+2. Acesse [share.streamlit.io](https://share.streamlit.io/) e realize login.
 3. Clique em **"New app"**.
 4. Selecione o repositório `suportesaav-web/the-bi-extractor`, branch `main` e defina **Main file path** como `app.py`.
-5. Em **Advanced Settings > Secrets**, declare sua chave de IA:
+5. Em **Advanced Settings > Secrets**, declare suas credenciais com suporte a backup:
    ```toml
-   GEMINI_API_KEY = "sua_chave_aqui"
+   GEMINI_API_KEY = "sua_chave_primaria"
+   GEMINI_API_KEY_BACKUP = "sua_chave_secundaria_opcional"
    ```
-6. Clique em **"Deploy!"**. O ambiente instalará os pacotes de `requirements.txt` e publicará o app online.
+6. Clique em **"Deploy!"**. O ambiente instalará as dependências e publicará o app.
 
 > 🌐 **Ambiente de Produção Ativo:**  
 > A aplicação oficial já está em execução no Streamlit Cloud: [https://the-bi-extractor-saavedra.streamlit.app/](https://the-bi-extractor-saavedra.streamlit.app/)
